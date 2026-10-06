@@ -1,0 +1,238 @@
+=====================================================================
+ BUILD MODE + BLUEPRINT (HOLOGRAM) - UNITY EDITOR SETUP
+ Date: 5/10/2026
+=====================================================================
+
+HOW IT PLAYS
+------------
+1. Press B                -> BuildMenu opens (list of buildings).
+2. Left click a building  -> menu closes, a blue hologram (blueprint) follows the crosshair.
+      Left click    = place it
+      Right click   = cancel
+      Mouse wheel   = rotate
+      Middle click  = auto placement ON (sits on the ground) / OFF (floats at a fixed distance)
+      RED hologram  = can't place here (the reason shows on screen when you click)
+3. Aim at a placed blueprint + Right click -> Blueprint panel opens
+      (only inside an Interaction Machine's area, else "No Interaction Machine in range").
+4. In the panel: Add / Subtract per material, Add All, Remove All, Remove Blueprint, Close.
+5. Every piece added -> the blueprint becomes the real building.
+
+All keys can be changed in KeyBindings (K menu):
+   Build (B), Interact (Mouse1), PlaceBuilding (Mouse0), CancelBuilding (Mouse1), AutoPlace (Mouse2).
+
+
+=====================================================================
+ SCRIPTS AND THEIR ROLE
+=====================================================================
+
+ Script               | Put it on                       | Role
+----------------------+---------------------------------+------------------------------------------------
+ BuildPart            | every shape of a building PREFAB| "this shape needs 1 item with this Item Id"
+ BuildingData         | asset (Create > Building >      | one buildable thing: name, description,
+                      |  Building Data)                 |  icon / Auto Icon, prefab
+ BlueprintPlacer      | PlayerSphere                    | moves the new hologram with the crosshair,
+                      |                                 |  place / cancel / rotate / auto placement, red check
+ BlueprintInteractor  | PlayerSphere                    | right click on a placed blueprint -> opens the panel
+ Blueprint            | (added by code, don't add it)   | the hologram itself: pieces, add, remove, finish
+ BuildMenu            | BuildMenu Canvas                | B opens the list, makes one button per building
+ BlueprintPanel       | BlueprintCanvas                 | the panel: rows + Add All / Remove All /
+                      |                                 |  Remove Blueprint / Close
+ BlueprintRow         | the ROW PREFAB                  | one material line: icon, text, Add, Subtract
+ ScreenMessage        | a TMP text on the HUD           | short warnings on screen that fade away
+ MenuState            | (nothing, code only)            | "is any menu open?" for all scripts
+ InteractionMachine   | a machine in the scene          | its area is where you may build / open blueprints
+ GameRules            | GameRule object                 | WorldInteraction ON = no machine needed
+
+
+=====================================================================
+ STEP 1 - BEFORE YOU START
+=====================================================================
+[ ] One EventSystem in the scene (only one!).
+[ ] An InteractionMachine already in the scene (the one from the crash),
+    OR GameRule -> tick "World Interaction". Otherwise every blueprint is red.
+[ ] You can pick up the material items with F (e.g. Stone with ItemPickup, Item Id "Stone").
+
+
+=====================================================================
+ STEP 2 - THE BUILDING PREFAB (e.g. InteractMachine)
+=====================================================================
+Hierarchy (inside the prefab):
+
+  InteractMachine            <- the building's own scripts (e.g. InteractionMachine)
+      Stone                  <- BuildPart + Collider
+      Stone                  <- BuildPart + Collider
+      ... (one per piece)
+
+For EVERY piece:
+[ ] Add Component -> BuildPart.
+[ ] BuildPart -> Item Id = the EXACT Item Id of the item it needs (e.g. "Stone", same capitals).
+[ ] Optional: BuildPart -> Material (a MaterialData). If its "Floats" is ticked,
+    the building may be placed in the air.
+[ ] REMOVE the Rigidbody   (or the finished building falls apart).
+[ ] REMOVE ItemPickup       (or the player can grab the building apart with F).
+[ ] Tag = Untagged.
+[ ] Keep the Collider.
+Tip: if the pieces are copies of the Stone item prefab, right click -> Prefab > Unpack first.
+
+The recipe is read from these pieces: 8 Stones with BuildPart = the panel asks for 8 Stone.
+The pivot can be anywhere: the hologram is centered by its real middle.
+
+
+=====================================================================
+ STEP 3 - BUILDING DATA (the asset)
+=====================================================================
+[ ] Project window (e.g. Assets/Building) -> right click -> Create > Building > Building Data.
+[ ] Display Name  = text on the build button, e.g. "Interaction Machine".
+[ ] Description   = shown in the blueprint panel.
+[ ] Icon          = empty for now ...
+[ ] Auto Icon     = ticked -> a photo of the prefab is taken automatically.
+                   (Later: drag a real Sprite into Icon; it is used instead.)
+[ ] Prefab        = the building prefab from STEP 2.
+
+
+=====================================================================
+ STEP 4 - PLAYER
+=====================================================================
+PlayerSphere:
+[ ] Add Component -> BlueprintPlacer      (Place Range, Rotate Step, Auto Place)
+[ ] Add Component -> BlueprintInteractor  (Reach)
+
+
+=====================================================================
+ STEP 5 - BUILD MENU (B)
+=====================================================================
+Hierarchy:
+
+  BuildMenu (Canvas, ACTIVE)        <- BuildMenu script
+      MenuPanel (Panel)
+          Buttons (Empty)           <- Grid Layout Group (Cell Size 120 x 140)
+              (EMPTY - buttons are made here when the game starts)
+
+BuildMenu script fields:
+   Menu Panel     = MenuPanel
+   Buttons Parent = Buttons
+   Button Prefab  = BuildButton PREFAB (from the Project window)
+   Buildings      = + -> drag the Building Data asset (NOT the building prefab)
+
+Button prefab (Project window, NOT in the scene):
+
+  BuildButton (Button - TextMeshPro)   Pos X/Y = 0, Width 120, Height 140
+      Icon (Image)                     name must be exactly "Icon"
+                                       top-center, 100 x 100, Preserve Aspect ON, Raycast Target OFF
+      Text (TMP)                       bottom-stretch, Height 30, Font Size 16 (only ONE TMP text)
+
+How to make it:
+[ ] UI > Button - TextMeshPro, add a child UI > Image named "Icon", set the sizes above.
+[ ] Drag it into the Project window (prefab), then DELETE it from the scene.
+[ ] Make sure the prefab's Pos X / Pos Y are 0 (not 683 / 384), or the buttons go off-screen.
+
+
+=====================================================================
+ STEP 6 - BLUEPRINT PANEL (right click on a blueprint)
+=====================================================================
+Hierarchy:
+
+  BlueprintCanvas (Canvas, ACTIVE!)    <- BlueprintPanel script (on the CANVAS, not the panel)
+                                          Sort Order higher than the HUD / Inventory canvases
+      BlueprintPanel (Panel)           <- the script hides / shows this
+          Title (Text - TMP)
+          Description (Text - TMP)
+          Rows (Empty)                 <- Vertical Layout Group
+              (EMPTY - rows are made here)
+          AddAllButton (Button - TMP)
+          RemoveAllButton (Button - TMP)
+          RemoveButton (Button - TMP)  <- "Remove Blueprint"
+          CloseButton (Button - TMP)
+
+The canvas must stay ACTIVE (ticked). Only the child panel gets hidden.
+If the canvas is off, the script never runs and right click does nothing.
+
+BlueprintPanel script fields:
+   Panel            = BlueprintPanel (the Panel object)
+   Title Text       = Title
+   Description Text = Description (optional)
+   Rows Parent      = Rows
+   Row Prefab       = BlueprintRow PREFAB (from the Project window)
+
+Panel buttons -> On Click () -> + -> drag BlueprintCanvas into the slot -> choose:
+   AddAllButton     -> BlueprintPanel.AddAll()           all materials you have go in
+   RemoveAllButton  -> BlueprintPanel.RemoveAll()        all materials back, blueprint STAYS
+   RemoveButton     -> BlueprintPanel.RemoveBlueprint()  all materials back, blueprint DELETED
+   CloseButton      -> BlueprintPanel.Close()            hides the panel
+(Drag the CANVAS from the Hierarchy, not the script file.)
+
+
+=====================================================================
+ STEP 7 - BLUEPRINT ROW PREFAB
+=====================================================================
+Prefab (Project window, NOT in the scene):
+
+  BlueprintRow                  <- BlueprintRow script + Horizontal Layout Group
+                                   Width 560, Height 60
+                                   Layout: Middle Left, Spacing 10,
+                                           Control Child Size OFF, Child Force Expand OFF
+      Icon (Image)              50 x 50, Preserve Aspect ON, Raycast Target OFF
+      Label (Text - TMP)        250 x 50, Font Size 20, left / middle, readable color
+      AddButton (Button - TMP)  80 x 40, text "Add"
+      RemoveButton (Button-TMP) 100 x 40, text "Subtract"
+
+BlueprintRow script fields:
+   Icon          = Icon
+   Label         = Label
+   Add Button    = AddButton
+   Remove Button = RemoveButton
+   Auto Icon     = ticked (inventory icon, or a photo of the piece if you have none)
+   Enough / Not Enough Color = text color when you have / don't have enough
+
+IMPORTANT: leave AddButton's and RemoveButton's On Click () lists EMPTY.
+The script connects them when it makes each row. The FIELD decides what a button does,
+not its name: whatever is in "Add Button" adds, whatever is in "Remove Button" subtracts.
+
+Row text looks like:  Stone   1 / 8   (have 12)     ...or...   Stone   8 / 8   (done)
+Add is greyed out when you have none (or it's done). Subtract is greyed out when 0 are added.
+
+
+=====================================================================
+ STEP 8 - SCREEN MESSAGE (warnings)
+=====================================================================
+  HUDCanvas (ACTIVE)
+      Message (Text - TMP)     <- ScreenMessage script
+                                  near the middle (a bit above the crosshair), text empty,
+                                  on a canvas that draws above the panels if you want it on top.
+Without it, the warnings only go to the Console.
+
+
+=====================================================================
+ STEP 9 - TEST
+=====================================================================
+[ ] Play: BuildMenu is hidden.
+[ ] B: one button with the building's name (and picture).
+[ ] Click it: hologram on the crosshair. Wheel rotates, middle click toggles auto placement.
+[ ] Outside a machine area -> red. Inside, on the ground, nothing in the way -> blue.
+[ ] Left click: placed. Right click it: panel with one row per material.
+[ ] Add / Subtract / Add All / Remove All / Remove Blueprint / Close all work.
+[ ] Add every piece -> the real building appears.
+
+
+=====================================================================
+ TROUBLESHOOTING (things that already happened)
+=====================================================================
+ Problem                                   | Fix
+-------------------------------------------+------------------------------------------------------
+ Menu visible at start / B does nothing    | Console red errors? BuildMenu script on the CANVAS?
+                                           |  Menu Panel filled in?
+ Only a "Button" shows, not the building   | Old manual Button left in MenuPanel -> delete it.
+                                           |  Buttons Parent must be the "Buttons" object.
+ Button made but not visible               | BuildButton prefab Pos X/Y must be 0 (not 683/384).
+                                           |  Use a Grid Layout Group on Buttons.
+ Building never appears in the list        | Buildings list empty, or the prefab was dragged
+                                           |  instead of the Building Data asset.
+ Right click on blueprint does nothing     | BlueprintCanvas is switched off (grey in Hierarchy).
+ Row icon / text overlap                   | Horizontal Layout Group on the row + sizes in STEP 7.
+ Subtract does nothing                     | Remove Button field empty, or nothing added yet.
+ Panel buttons do nothing                  | On Click () not set, or something with Raycast Target
+                                           |  covers them, or no EventSystem.
+ Hologram always red                       | No InteractionMachine area there (or WorldInteraction
+                                           |  off), something overlapping, or in the air.
+ Finished building falls apart / grabbable | Remove Rigidbody + ItemPickup from the prefab's pieces.
+ Panel asks for the wrong item             | BuildPart Item Id must match the item's Item Id exactly.

@@ -1,0 +1,189 @@
+[Phototype]
+Initial GitHub system
+
+Create an agreement of script styling.
+
+1.Create a GUI
+
+2.Create a character customization
+
+3.Set a player spawn and generate static map
+
+4.Create an environment correspond to the map area
+
+5.Create a player inventory
+
+6.Player can gather, mine, chop(Any action that get material)
+
+7.Drop material from resources or when resources are destroyed
+
+8.Create a crafting recipe
+
+9.Create combat system to the game
+
+10.Create creature with Ai or decision tree algorithm 
+
+
+[Prototype Idea]
+{
+
+Story:
+The player is a ball. The ball's race comes from an unknown dimension and travelled to this universe on a mothership. The ball left the mothership in a small traveller ship, but the ship broke down and crashed on this planet. The ball survived with some helpful gear: a crafting machine, and an interaction machine that lets the ball grab things within a radius around the spawn point.
+The ball's race has no fixed shape and can develop into anything. For example, they may collect materials from living creatures, build a machine to grow a new body, and then move their soul into it. Because of this, the game will have body development and vehicle suits.
+The main goal of the prototype is to craft a new traveller ship from the planet's resources and fly back to the mothership. During this phase, the player has to survive and craft.
+
+Menu UI:
+Pressing "Esc" opens the menu. The mouse cursor shows the character's soul, because the soul is the real player. From the menu, the player can change key bindings, adjust the sound volume, or go back to the Main Menu. If a new body is near the character, the player can choose to move the soul into that body and use it.
+
+Crafting system:
+Players gather resources such as stone, wood and iron. Each resource has physical properties like weight, hardness and sharpness. Resources are shaped into basic shapes (blocks, cylinders, plates, wedges), which are the building pieces of the game.
+In the crafting system, players freely place these shapes together on a crafting machine, like building blocks. The finished build becomes one real 3D item. There are no fixed recipes: the game only identifies the creation's type (such as tool, armor or vehicle) and calculates its attributes from its parts, meaning the materials, their shapes, and where they're placed. Mixing materials can create new attributes. The player then names the creation, so a stone block on wooden cylinders is a "hammer" because the player built it that way and called it that.
+Crafting machines decide which types of things can be built. A few functional parts, like wheels, motors, hinges and seats, let players build things that move and work.
+Every creation gets an inventory icon automatically: the game takes a picture of the 3D item when it's crafted. As a late-game mechanic, players can unlock a 3D preview that shows and predicts the crafting result before they craft it.
+As the developer, you only design the resources, shapes, functional parts and the rules for how they combine. Every tool, vehicle and building comes from the players' ideas, which gives the game an unlimited number of items without you modeling each one.
+
+(3/10/2026) Crafting rules:
+Crafting machines are the exception to "no fixed recipes": every machine has its own recipe to build. Tools and vehicles still get their stats from their parts' properties. Some crafting also uses up consumables like glue or fuel.
+
+(3/10/2026) Dissection Machine:
+The Dissection Machine cuts a raw material resource into smaller pieces of one fundamental shape unit, which become the basic building pieces for crafting. It only accepts raw resources (cube, rect, sphere, capsule, cylinder), never crafted items like a sword, hammer or mech suit.
+
+Amount of pieces (by volume, using the exact volume formula of each shape, not its bounding box):
+  pieces = floor(inputVolume / outputShapeVolume x tierEfficiency x sizeYield)
+- tierEfficiency: better machines lose less.
+- sizeYield: the smaller the output piece, the more is lost (like real-world chip production).
+- Fuel used scales with the input volume.
+- Leftover depends on the machine type: some lose it, some turn it into a by-product.
+- Each piece keeps the source material (hardness, toughness), and its weight is recalculated from its new volume.
+- Machine tier data (efficiency, fuel type, fuel per volume, allowed output sizes with their yield, leftover/by-product) is kept in a ScriptableObject per tier, so a new tier needs no code. This may change later if it needs more customization.
+
+Starter Dissection Machine (prototype focus):
+- Output size 0.1 only; the output shape can be any Unity 3D primitive (Cube, Sphere, Capsule, Cylinder). Plane/Quad are flat and have no volume.
+- Keeps 50% and needs organic fuel.
+- Example: stone 0.25 x 0.25 x 0.25 into 0.1 cubes: 0.015625 / 0.001 = 15.625, x 0.5 = 7.8125, round down = 7 pieces.
+- To decide: does "0.1" mean the bounding size for round shapes (a 0.1 sphere has a smaller volume, so you get more pieces) or do round shapes cost the same as a cube?
+
+(3/10/2026) Starter Crafting Machine:
+The player builds with the dissected 0.1-size pieces (any shape from the Dissection Machine), snapping them together like building blocks.
+
+Two modes:
+1. Template: I design the blueprint (e.g. a basic hammer or a basic walker) based on my gameplay, and the player fills it with their own pieces. Stats are still calculated from the real materials.
+2. Free design: the player builds whatever they like, and the machine shows the calculated stats.
+
+Category: the player picks what they are building. For now only Tools and Vehicle; more categories later.
+
+Zones:
+- Before building, the player drags out an area (zone) for each part, so the game knows which piece belongs to which part.
+- Zones can't overlap, every piece must sit fully inside one zone, and nothing can be built outside the zones.
+- Each zone's stats are calculated with that zone's own formula.
+
+Tools (2 zones):
+1. Head: the part that does the job (hammer head, pickaxe head, sword blade). Its stats come from SharpnessMath (edge, sharpness, cut/blunt damage, chip chance).
+2. Handle: the part that is held. Grip strength comes from the handle material's toughness, the handle thickness compared to the hand size, the arm's strength and the tool's weight. Grip decides the swing speed and whether the tool can be lifted at all.
+
+Vehicle (6 zones): head, body, left arm, right arm, left leg, right leg. Arms and legs can be wheels.
+Prototype focus:
+- Body: holds the sphere ball character.
+- Left/right arm: grab items and attack.
+- Left/right leg: walk.
+- Head: later.
+
+Glue:
+- Joining pieces uses up glue. All connected pieces in one build must use the same glue type.
+- Glue is used per joint (each touching pair of pieces), and each joint's strength adds to the stats.
+- At craft time (once): find every touching pair and save it as a joint list with a strength per joint.
+- In combat (only on a hit, never every frame): damage only the joints near the hit point. If a joint breaks, run a flood fill to check if a part of the build is cut off; if so, it falls off as its own object.
+- Rough cost: a 1 m body of 0.1 pieces is at most 1000 pieces / ~3000 joints, and a flood fill over that takes well under a millisecond.
+- Rendering: merge each zone (or connected chunk) into one mesh; pieces are kept only as data, not 1000 GameObjects.
+- Prototype: per-joint glue for stats, but in combat only the joints between zones can break (an arm falls off, but the arm itself doesn't shatter). Full per-joint cutting can come later without changing the saved data.
+
+(3/10/2026) InteractionMachine:
+The ball has no hands, so it can only grab, pick up and interact with objects while it is inside the radius of an InteractionMachine. It is part of the gear the ball survived the crash with. For now it is a placeholder visual.
+- Upgrades (e.g. a bigger radius) are installed by right-clicking the machine.
+
+(3/10/2026) Machine panel (right side of the inventory, InventoryDescription):
+Shows the machine whose radius is affecting the player right now.
+- MachineIcon (was ItemImage): picture of the machine.
+- MachineDescription (was ItemDescription): what the machine's radius does and what it is for.
+- No machine in range: the panel is empty.
+- Several machines in range: show the nearest one (any kind); if exactly the same distance, pick one at random.
+- Only radius machines show here. Crafting and Dissection Machines have no radius for now; the player walks up and interacts with them.
+
+(3/10/2026) Controls:
+- F = grab (as now).
+- Right-click = interact, only on what the crosshair is pointing at: a machine, a blueprint, or a radius machine (InteractionMachine). Right-clicking anything else does nothing.
+- B = build mode.
+- 1-8 / mouse wheel = select hotbar slot.
+- New keys go through KeyBindings (new KeyAction entries) so they can be rebound.
+
+(3/10/2026) Build mode & blueprint:
+- Press B to enter build mode and place a Crafting Machine or an InteractionMachine.
+- Placing puts down a blue hologram blueprint; the recipe floats above it and shows what is still needed.
+- The player holds a required material in the active hotbar slot and right-clicks the blueprint to add it.
+- When every material is added, the real machine is built.
+
+(3/10/2026) Hotbar:
+- 8 slots, separate from the 20 inventory slots, always visible on screen.
+- Select with keys 1-8 or the mouse wheel; the selected slot is the active slot (the item being held).
+- With the inventory open (E), items move between inventory and hotbar with the same Minecraft-style clicks: click to pick up (Held), click to put down.
+
+(3/10/2026) Radius-viewer item:
+- Radii are hidden by default. A special item, while held in the active slot, shows radii as rings on the ground.
+- Right-clicking with it (crosshair on nothing, or with the inventory open) opens its settings, e.g. which radii or ring style to show.
+
+(3/10/2026) Order of work:
+1. Hotbar / active slot
+2. InteractionMachine placeholder + machine panel in the inventory
+3. Build mode (B) + blueprint hologram
+4. Radius-viewer item
+
+}
+
+[Update & Idea]
+{
+
+Future:
+- Advanced Dissection Machines cut smaller, down to 0.01 cubes, with lower loss.
+- Only some advanced materials (beyond the normal rules) can be cut into ultra-thin layers down to 0.001 thick, so that minimum thickness belongs to the material, not the machine.
+- Machines that use up materials to change another material's properties.
+- Too many tiny pieces can't each be a GameObject, so pieces live as inventory stacks and only become objects when dropped.
+
+}
+
+
+
+
+
+
+
+What needs to be in the prototype:
+
+- have multiple mineable materials like wood, and stone (can different types of ore, like copper and iron)
+- Needs to have mining tools like pickaxe and axe.
+- Have enemies that can attack, dodge, have hp. 
+- have Base building
+- Environments trees, different biomes, caves. Potentially this can be procedural generation.
+- When player dies, all items are lost.
+- Respawn at origin point
+- player has health, hunger and stamina
+- animals, trees, berries can be mined or killed for food items that heal health points.
+- Day night cycle(done)
+- craft armour and weapons, tools. start off with no tools, and tools like an axe needs to cut down trees faster. 
+- Every night enemies get stronger as days go on (more hp, more damage, certain stronger enemies can spawn at later days)
+- make health related resources harder to find on later nights.
+- crafting table needs to list all possible craftable items 
+
+
+
+Needs to be in final game:
+- There can different types like human walking enemies and flying creature enemies 
+- Enemies can target player base, and chests within that store player items.
+- 1st and 3rd person mode.
+- multiple lives, so you can die more times before game over
+- crafting table needs to list all possible craftable items and the recipe (what items you need to craft them) 
+- have a weather system that possibly affects the number of resources like a storm that reduces stones gained after mining. The chance of this storm occurring increases as days go on. 
+- can have a crossbow weapon for flying enemies/birds. 
+
+
+
+
